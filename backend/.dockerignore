@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+tsconfig.tsbuildinfo
+.env
+.env.*
+!.env.example
+*.sqlite
+coverage
+npm-debug.log*
+.DS_Store
