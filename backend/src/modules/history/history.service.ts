@@ -760,11 +760,14 @@ export class HistoryService {
             WHERE f.mobile_number IN (${msisdnVariants.map(() => "?").join(", ")})
                OR f.transaction_id IN (${msisdnVariants.map(() => "?").join(", ")})
                OR f.payment_gateway_ref IN (${msisdnVariants.map(() => "?").join(", ")})
-               OR ep.mobileAccountNo IN (${msisdnVariants.map(() => "?").join(", ")})
-               OR jc.walletAccountNumber IN (${msisdnVariants.map(() => "?").join(", ")})
+               /* Wallet-number search temporarily disabled — join stays (still
+                  used to display wallet_number on matched rows), just not
+                  used to find rows by wallet number for now:
+               OR ep.mobileAccountNo IN (...)
+               OR jc.walletAccountNumber IN (...) */
             ORDER BY f.created_at DESC
           `,
-          [...msisdnVariants, ...msisdnVariants, ...msisdnVariants, ...msisdnVariants, ...msisdnVariants],
+          [...msisdnVariants, ...msisdnVariants, ...msisdnVariants],
         );
       }
     } catch (e:any) {

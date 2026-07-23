@@ -58,13 +58,14 @@ class SourceDatabaseModule {}
       envFilePath: '.env',
     }),
 
-    // Bull Queue — reads REDIS_HOST / REDIS_PORT from .env via ConfigService
+    // Bull Queue — reads REDIS_HOST / REDIS_PORT / REDIS_PASSWORD from .env via ConfigService
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         redis: {
           host: config.get<string>('REDIS_HOST', 'localhost'),
           port: config.get<number>('REDIS_PORT', 6379),
+          password: config.get<string>('REDIS_PASSWORD') || undefined,
         },
       }),
     }),
