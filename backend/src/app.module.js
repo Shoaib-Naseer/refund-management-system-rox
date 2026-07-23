@@ -72,8 +72,8 @@ var AppModule = function () {
                 // Bull Queue
                 bull_1.BullModule.forRoot({
                     redis: {
-                        host: process.env.REDIS_HOST || 'localhost',
-                        port: parseInt(process.env.REDIS_PORT) || 6379,
+                        host: process.env.REDIS_HOST ,
+                        port: parseInt(process.env.REDIS_PORT),
                         password: process.env.REDIS_PASSWORD || undefined,
                     },
                 }),

@@ -47,11 +47,9 @@ export class RefundProcessingService {
       salt: process.env.JAZZCASH_SALT || "",
       currency: process.env.JAZZCASH_CURRENCY || "PKR",
       apiUrl:
-        process.env.JAZZCASH_REFUND_API_URL ||
-        "https://onlinepayments.jazzcash.com.pk/payment-orchestrator/api/v1/rest/payments/m-wallet/refund",
+        process.env.JAZZCASH_REFUND_API_URL,
       cardRefundApiUrl:
-        process.env.JAZZCASH_CARD_REFUND_API_URL ||
-        "https://onlinepayments.jazzcash.com.pk/payment-orchestrator/api/v1/rest/payments/mpgs/authorize/refund",
+        process.env.JAZZCASH_CARD_REFUND_API_URL ,
       orchestratorUrl:
         "https://onlinepayments.jazzcash.com.pk/payment-orchestrator/api/v1/rest/payments/mpgs/v2.0/authorize/refund",
     };

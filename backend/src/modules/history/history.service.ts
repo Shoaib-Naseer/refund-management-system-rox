@@ -32,6 +32,8 @@ export interface HistoryRecord {
   orderId: string;
   /** Same as orderId, exposed explicitly for Era 3 (fintech_subscription.subscriptions.payment_order_id). */
   paymentOrderId?: string;
+  /** Era 2 only — rox_app.subscription_fulfillment_requests.transaction_id, distinct from the gateway's own orderId/txnRefNo. */
+  tid?: string;
   paymentMethod?: string;
   packageName: string | null;
   amountDeducted: number;
@@ -718,36 +720,54 @@ export class HistoryService {
   ): Promise<HistoryRecord[]> {
     const msisdnVariants = isTxnRef ? [] : buildMsisdnVariants(msisdn);
 
+    // Wallet number lives on the payment-gateway's own table (not on the
+    // fulfillment row itself), so a wallet-number search has to join out to
+    // both EasyPaisa and JazzCash's payment tables via payment_gateway_ref.
+    // Also gives us the wallet number for display in one round trip instead
+    // of the old per-row getEra2WalletNumber() follow-up query.
+    const walletJoin = `
+      FROM \`rox_app\`.\`subscription_fulfillment_requests\` f
+      LEFT JOIN \`rox_easypaisa\`.\`easypaisa_transactions\` ep
+        ON ep.orderId = f.payment_gateway_ref
+      LEFT JOIN \`rox_jazz_payments\`.\`transaction\` jc
+        ON jc.txnRefNo = f.payment_gateway_ref
+    `;
+    const walletSelect = `COALESCE(ep.mobileAccountNo, jc.walletAccountNumber) AS wallet_number`;
+
     let rows: any[];
     try {
       if (isTxnRef) {
         rows = await this.sourceDataSource.query(
           `
-            SELECT transaction_id, mobile_number, service_type, service_code, fulfillment_price,
-                   payment_method, payment_status, payment_gateway_ref, amount_deducted,
-                   fulfillment_status, fulfillment_message, error_message, metadata, created_at
-            FROM \`rox_app\`.\`subscription_fulfillment_requests\`
-            WHERE transaction_id = ? OR payment_gateway_ref = ?
-            ORDER BY created_at DESC
+            SELECT f.transaction_id, f.mobile_number, f.service_type, f.service_code, f.fulfillment_price,
+                   f.payment_method, f.payment_status, f.payment_gateway_ref, f.amount_deducted,
+                   f.fulfillment_status, f.fulfillment_message, f.error_message, f.metadata, f.created_at,
+                   ${walletSelect}
+            ${walletJoin}
+            WHERE f.transaction_id = ? OR f.payment_gateway_ref = ?
+            ORDER BY f.created_at DESC
           `,
           [msisdn, msisdn],
         );
       } else {
         rows = await this.sourceDataSource.query(
           `
-            SELECT transaction_id, mobile_number, service_type, service_code, fulfillment_price,
-                   payment_method, payment_status, payment_gateway_ref, amount_deducted,
-                   fulfillment_status, fulfillment_message, error_message, metadata, created_at
-            FROM \`rox_app\`.\`subscription_fulfillment_requests\`
-            WHERE mobile_number IN (${msisdnVariants.map(() => "?").join(", ")})
-               OR transaction_id IN (${msisdnVariants.map(() => "?").join(", ")})
-               OR payment_gateway_ref IN (${msisdnVariants.map(() => "?").join(", ")})
-            ORDER BY created_at DESC
+            SELECT f.transaction_id, f.mobile_number, f.service_type, f.service_code, f.fulfillment_price,
+                   f.payment_method, f.payment_status, f.payment_gateway_ref, f.amount_deducted,
+                   f.fulfillment_status, f.fulfillment_message, f.error_message, f.metadata, f.created_at,
+                   ${walletSelect}
+            ${walletJoin}
+            WHERE f.mobile_number IN (${msisdnVariants.map(() => "?").join(", ")})
+               OR f.transaction_id IN (${msisdnVariants.map(() => "?").join(", ")})
+               OR f.payment_gateway_ref IN (${msisdnVariants.map(() => "?").join(", ")})
+               OR ep.mobileAccountNo IN (${msisdnVariants.map(() => "?").join(", ")})
+               OR jc.walletAccountNumber IN (${msisdnVariants.map(() => "?").join(", ")})
+            ORDER BY f.created_at DESC
           `,
-          [...msisdnVariants, ...msisdnVariants, ...msisdnVariants],
+          [...msisdnVariants, ...msisdnVariants, ...msisdnVariants, ...msisdnVariants, ...msisdnVariants],
         );
       }
-    } catch (e) {
+    } catch (e:any) {
       this.logger.error(`[History][Era 2] Query error: ${e.message}`);
       return [];
     }
@@ -816,16 +836,14 @@ export class HistoryService {
         refundEligibility = (packagePosted === "No" && !isReversed) ? "Eligible" : "Ineligible";
       }
 
-      const walletNumber = await this.getEra2WalletNumber(
-        paymentMethod,
-        gatewayRef,
-      );
+      const walletNumber = row.wallet_number || null;
 
       results.push({
         era: 2,
         tableName: "rox_app.subscription_fulfillment_requests",
         transactionReference: gatewayRef,
         orderId: txId,
+        tid: txId,
         paymentMethod: row.payment_method || null,
         packageName: serviceCode || serviceType,
         amountDeducted: price,
@@ -1112,50 +1130,6 @@ export class HistoryService {
     }
 
     return results;
-  }
-
-  /**
-   * Era 2's subscription_fulfillment_requests row has no wallet number column —
-   * it has to be joined in from the gateway-specific transaction table via
-   * payment_gateway_ref, since that's the only common key between the two.
-   */
-  private async getEra2WalletNumber(
-    paymentMethodKey: string,
-    gatewayRef: string,
-  ): Promise<string | null> {
-    if (!gatewayRef) return null;
-
-    if (paymentMethodKey === "EASYPAISA") {
-      try {
-        const rows = await this.sourceDataSource.query(
-          `SELECT mobileAccountNo FROM \`rox_easypaisa\`.\`easypaisa_transactions\` WHERE orderId = ? LIMIT 1`,
-          [gatewayRef],
-        );
-        return rows.length > 0 ? rows[0].mobileAccountNo || null : null;
-      } catch (e) {
-        this.logger.error(
-          `[History][Era 2] EasyPaisa wallet lookup error for ${gatewayRef}: ${e.message}`,
-        );
-        return null;
-      }
-    }
-
-    if (paymentMethodKey === "JAZZCASH") {
-      try {
-        const rows = await this.sourceDataSource.query(
-          `SELECT walletAccountNumber FROM \`rox_jazz_payments\`.\`transaction\` WHERE txnRefNo = ? LIMIT 1`,
-          [gatewayRef],
-        );
-        return rows.length > 0 ? rows[0].walletAccountNumber || null : null;
-      } catch (e) {
-        this.logger.error(
-          `[History][Era 2] JazzCash wallet lookup error for ${gatewayRef}: ${e.message}`,
-        );
-        return null;
-      }
-    }
-
-    return null;
   }
 
   /**

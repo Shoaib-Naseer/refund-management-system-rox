@@ -7,16 +7,12 @@ import * as crypto from 'crypto';
  */
 
 const EASYPAISA_INQUIRY_CONFIG = {
-  storeId: process.env.EASYPAISA_STORE_ID || '485616',
+  storeId: process.env.EASYPAISA_STORE_ID,
   credentials:
-    process.env.EASYPAISA_CREDENTIALS ||
-    process.env.EASYPAISA_PASSWORD ||
-    'Uk9YKFBNQ0wpOjJjOGY1MmVlNTY1ZjE1M2RhNDdmZGNjODE5MDk0NmIw',
-  accountNum: process.env.EASYPAISA_ACCOUNT_NUM || '152497498',
+    process.env.EASYPAISA_CREDENTIALS,
+  accountNum: process.env.EASYPAISA_ACCOUNT_NUM,
   apiUrl:
-    process.env.EASYPAISA_INQUIRY_API_URL ||
-    'https://easypay.easypaisa.com.pk/easypay-service/rest/v4/inquire-transaction',
-};
+    process.env.EASYPAISA_INQUIRY_API_URL};
 
 /**
  * Inquires transaction status directly from the Easypaisa gateway and returns the raw response body

@@ -56,6 +56,10 @@ export class RefundRequest {
   @Column({ name: 'payment_order_id', type: 'varchar', length: 255, nullable: true })
   paymentOrderId: string;
 
+  /** Era 2 only — rox_app.subscription_fulfillment_requests.transaction_id (see HistoryRecord.tid). */
+  @Column({ name: 'legacy_transaction_id', type: 'varchar', length: 255, nullable: true })
+  legacyTransactionId: string;
+
   @Column({ name: 'payment_method', type: 'varchar', length: 50, nullable: true })
   paymentMethod: string;
 
