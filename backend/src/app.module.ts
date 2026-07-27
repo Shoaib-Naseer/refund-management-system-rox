@@ -4,6 +4,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
 import { DataSource } from 'typeorm';
 import { typeOrmConfig, sourceTypeOrmConfig } from './config/typeorm.config';
+import { envValidationSchema } from './config/env.validation';
+import appConfig from './config/app.config';
+import databaseConfig from './config/database.config';
+import jwtConfig from './config/jwt.config';
+import redisConfig from './config/redis.config';
+import easypaisaConfig from './config/easypaisa.config';
+import jazzcashConfig from './config/jazzcash.config';
 import { RefundCasesModule } from './modules/refund-cases/refund-cases.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { RefundProcessingModule } from './modules/refund-processing/refund-processing.module';
@@ -27,8 +34,9 @@ import { RolesModule } from './modules/roles/roles.module';
   providers: [
     {
       provide: 'SOURCE_DATA_SOURCE',
-      useFactory: async () => {
-        const cfg = sourceTypeOrmConfig() as any;
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => {
+        const cfg = sourceTypeOrmConfig(configService) as any;
         // Strip NestJS-specific retry keys — raw DataSource doesn't know them
         delete cfg.retryAttempts;
         delete cfg.retryDelay;
@@ -56,22 +64,22 @@ class SourceDatabaseModule {}
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validationSchema: envValidationSchema,
+      validationOptions: { abortEarly: false },
+      load: [appConfig, databaseConfig, jwtConfig, redisConfig, easypaisaConfig, jazzcashConfig],
     }),
 
-    // Bull Queue — reads REDIS_HOST / REDIS_PORT / REDIS_PASSWORD from .env via ConfigService
+    // Bull Queue — reads redis.* config (see config/redis.config.ts)
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        redis: {
-          host: config.get<string>('REDIS_HOST', 'localhost'),
-          port: config.get<number>('REDIS_PORT', 6379),
-          password: config.get<string>('REDIS_PASSWORD') || undefined,
-        },
+        redis: config.get('redis'),
       }),
     }),
 
     // Primary Database (rox_refund_management - SQLite locally)
     TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
       useFactory: typeOrmConfig,
     }),
 

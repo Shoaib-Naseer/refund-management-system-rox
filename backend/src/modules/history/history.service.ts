@@ -4,10 +4,7 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { RefundRequest, RefundRequestStatus } from "../../entities/refund-request.entity";
 import { RefundCase, RefundCaseStatus, RefundStatus, VerificationResult } from "../../entities/refund-case.entity";
 import { buildMsisdnVariants, toSubscriberFormat } from "../verification/msisdn-utils";
-import {
-  inquireEasypaisa,
-  inquireJazzCash,
-} from "../verification/inquiry-service";
+import { InquiryService } from "../verification/inquiry-service";
 
 // Era 2/3 data isn't reliable before this point — Era 1 (Legacy Journey) is
 // only auto-included when a caller-supplied date filter predates this cutoff.
@@ -221,6 +218,7 @@ export class HistoryService {
     private readonly refundRequestRepo: Repository<RefundRequest>,
     @InjectRepository(RefundCase)
     private readonly refundCaseRepo: Repository<RefundCase>,
+    private readonly inquiryService: InquiryService,
   ) { }
 
   async getMsisdnHistory(
@@ -1181,7 +1179,7 @@ export class HistoryService {
 
     if (isEasyPaisa) {
       try {
-        const body = await inquireEasypaisa(inquiryRef);
+        const body = await this.inquiryService.inquireEasypaisa(inquiryRef);
         const responseCode = String(body.responseCode || "");
         const responseDesc = String(
           body.responseDesc || body.message || "",
@@ -1235,7 +1233,7 @@ export class HistoryService {
 
     if (isJazzCashOrCard) {
       try {
-        const body = await inquireJazzCash(inquiryRef);
+        const body = await this.inquiryService.inquireJazzCash(inquiryRef);
         const hasApiSuccess = String(body.pp_ResponseCode || "") === "000";
         const isPaidInquiry =
           body.pp_Status === "Completed" ||

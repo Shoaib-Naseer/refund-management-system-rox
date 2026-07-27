@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { DataSource } from "typeorm";
 import axios from "axios";
 import { toSubscriberFormat } from "../verification/msisdn-utils";
@@ -27,9 +28,14 @@ export interface NotificationSendResult {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly baseUrl = process.env.NOTIFICATIONS_SERVICE_URL || "http://localhost:3005";
+  private readonly baseUrl: string;
 
-  constructor(@Inject("SOURCE_DATA_SOURCE") private readonly sourceDataSource: DataSource) {}
+  constructor(
+    @Inject("SOURCE_DATA_SOURCE") private readonly sourceDataSource: DataSource,
+    configService: ConfigService,
+  ) {
+    this.baseUrl = configService.get<string>("app.notificationsServiceUrl");
+  }
 
   private async resolveUserAndToken(
     msisdn: string,

@@ -1,7 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import axios from "axios";
 import * as crypto from "crypto";
-import { inquireEasypaisa } from "../verification/inquiry-service";
+import { InquiryService } from "../verification/inquiry-service";
 
 export interface RefundApiResult {
   provider: "Jazz_Cash" | "Easy_Paisa" | "Card";
@@ -14,44 +15,24 @@ export interface RefundApiResult {
 @Injectable()
 export class RefundProcessingService {
   private readonly logger = new Logger(RefundProcessingService.name);
+  private readonly PKT_TIMEZONE: string;
 
-  // Default PKT timezone
-  private readonly PKT_TIMEZONE = process.env.PKT_TIMEZONE || "Asia/Karachi";
+  constructor(
+    private readonly inquiryService: InquiryService,
+    private readonly configService: ConfigService,
+  ) {
+    this.PKT_TIMEZONE = this.configService.get<string>("app.pktTimezone");
+  }
 
   // Config accessors
   private get easypaisaConfig() {
-    return {
-      storeId: process.env.EASYPAISA_STORE_ID || "",
-      credentials:
-        process.env.EASYPAISA_CREDENTIALS ||
-        process.env.EASYPAISA_PASSWORD ||
-        "",
-      authToken:
-        process.env.EASYPAISA_AUTH_TOKEN ||
-        process.env.EASYPAISA_TOKEN ||
-        process.env.JAZZ_EASYPAISA_TOKEN_KEY ||
-        "",
-      apiUrl: process.env.EASYPAISA_REFUND_API_URL || "",
-      privateKey:
-        process.env.EASYPAISA_REFUND_PRIVATE_KEY ||
-        process.env.EASYPAISA_PRIVATE_KEY ||
-        "",
-    };
+    return this.configService.get("easypaisa.refund");
   }
 
   private get jazzcashConfig() {
     return {
-      merchantId: process.env.JAZZCASH_MERCHANT_ID || "",
-      password: process.env.JAZZCASH_PASSWORD || "",
-      merchantMpin: process.env.JAZZCASH_MERCHANT_MPIN || "",
-      salt: process.env.JAZZCASH_SALT || "",
-      currency: process.env.JAZZCASH_CURRENCY || "PKR",
-      apiUrl:
-        process.env.JAZZCASH_REFUND_API_URL,
-      cardRefundApiUrl:
-        process.env.JAZZCASH_CARD_REFUND_API_URL ,
-      orchestratorUrl:
-        "https://onlinepayments.jazzcash.com.pk/payment-orchestrator/api/v1/rest/payments/mpgs/v2.0/authorize/refund",
+      ...this.configService.get("jazzcash"),
+      apiUrl: this.configService.get("jazzcash.refundApiUrl"),
     };
   }
 
@@ -395,7 +376,7 @@ export class RefundProcessingService {
     fallbackDate?: Date,
   ): Promise<string> {
     try {
-      const inquiry = await inquireEasypaisa(orderId);
+      const inquiry = await this.inquiryService.inquireEasypaisa(orderId);
       const gatewayDate = String(inquiry.transactionDateTime || "").split(" ")[0];
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(gatewayDate)) {
         return gatewayDate;

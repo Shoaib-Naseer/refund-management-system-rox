@@ -1,7 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { buildMsisdnVariants, toSubscriberFormat, toPayerFormat } from './msisdn-utils';
-import { inquireEasypaisa, inquireJazzCash } from './inquiry-service';
+import { InquiryService } from './inquiry-service';
 
 export interface VerificationResult {
   era: number;
@@ -29,6 +29,7 @@ export class VerificationService {
 
   constructor(
     @Inject('SOURCE_DATA_SOURCE') private readonly sourceDataSource: DataSource, // For rox_app / fintech_records
+    private readonly inquiryService: InquiryService,
   ) {}
 
   /**
@@ -450,7 +451,7 @@ export class VerificationService {
 
     if (isEasyPaisa) {
       try {
-        const body = await inquireEasypaisa(inquiryRef);
+        const body = await this.inquiryService.inquireEasypaisa(inquiryRef);
         const responseCode = String(body.responseCode || "");
         const responseDesc = String(
           body.responseDesc || body.message || "",
@@ -494,7 +495,7 @@ export class VerificationService {
 
     if (isJazzCashOrCard) {
       try {
-        const body = await inquireJazzCash(inquiryRef);
+        const body = await this.inquiryService.inquireJazzCash(inquiryRef);
         const hasApiSuccess = String(body.pp_ResponseCode || "") === "000";
         const isPaidInquiry =
           body.pp_Status === "Completed" ||
