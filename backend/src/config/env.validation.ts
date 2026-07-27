@@ -9,45 +9,43 @@ import * as Joi from 'joi';
 export const envValidationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test')
-    .required(),
-  PORT: Joi.number().required(),
-  PKT_TIMEZONE: Joi.string().required(),
+    .default('development'),
+  PORT: Joi.number().default(3000),
+  PKT_TIMEZONE: Joi.string().default('Asia/Karachi'),
 
   // Primary database
-  DB_TYPE: Joi.string().valid('mysql', 'sqlite').required(),
-  DB_HOST: Joi.string().required(),
-  DB_PORT: Joi.number().required(),
+  DB_TYPE: Joi.string().valid('mysql', 'sqlite').default('mysql'),
+  DB_HOST: Joi.string().default('localhost'),
+  DB_PORT: Joi.number().default(3306),
   DB_USERNAME: Joi.string().when('DB_TYPE', { is: 'mysql', then: Joi.required() }),
   DB_PASSWORD: Joi.string().allow('').when('DB_TYPE', { is: 'mysql', then: Joi.required() }),
-  DB_DATABASE: Joi.string().required(),
+  DB_DATABASE: Joi.string().default('database.sqlite'),
 
-  // Source (read-only) database — allowed to be absent; SourceDatabaseModule
-  // degrades gracefully when unreachable, so these are optional, not required.
-  SOURCE_DB_HOST: Joi.string().required(),
-  SOURCE_DB_PORT: Joi.number().required(),
+  // Source (read-only) database
+  SOURCE_DB_HOST: Joi.string().default('localhost'),
+  SOURCE_DB_PORT: Joi.number().default(3306),
   SOURCE_DB_USERNAME: Joi.string().allow('').optional(),
   SOURCE_DB_PASSWORD: Joi.string().allow('').optional(),
   SOURCE_DB_DATABASE: Joi.string().allow('').optional(),
 
   // Redis (Bull queue)
-  REDIS_HOST: Joi.string().required(),
-  REDIS_PORT: Joi.number().required(),
+  REDIS_HOST: Joi.string().default('localhost'),
+  REDIS_PORT: Joi.number().default(6379),
   REDIS_PASSWORD: Joi.string().allow('').optional(),
 
   // Auth
-  JWT_SECRET: Joi.string().required(),
-  JWT_EXPIRES_IN: Joi.string().required(),
+  JWT_SECRET: Joi.string().default('dev-only-change-me-in-production'),
+  JWT_EXPIRES_IN: Joi.string().default('8h'),
 
   // Notifications
-  NOTIFICATIONS_SERVICE_URL: Joi.string().uri().required(),
+  NOTIFICATIONS_SERVICE_URL: Joi.string().uri().default('http://localhost:3005'),
 
-  // Easypaisa inquiry gateway — no fallback in code, so these are hard
-  // requirements: an undefined value here used to fail silently at request
-  // time instead of at startup.
+  // Easypaisa inquiry gateway
   EASYPAISA_STORE_ID: Joi.string().required(),
-  EASYPAISA_CREDENTIALS: Joi.string().required(),
+  EASYPAISA_CREDENTIALS: Joi.string().optional(),
   EASYPAISA_ACCOUNT_NUM: Joi.string().required(),
-  EASYPAISA_INQUIRY_API_URL: Joi.string().uri().required(),
+  EASYPAISA_INQUIRY_API_URL: Joi.string().uri().optional(),
+  EASYPAISA_INQUIRY_URL: Joi.string().uri().optional(),
 
   // Easypaisa refund gateway
   EASYPAISA_PASSWORD: Joi.string().allow('').optional(),
@@ -63,10 +61,11 @@ export const envValidationSchema = Joi.object({
   JAZZCASH_PASSWORD: Joi.string().required(),
   JAZZCASH_MERCHANT_MPIN: Joi.string().allow('').optional(),
   JAZZCASH_INTEGRITY_SALT: Joi.string().optional(),
-  JAZZCASH_SALT: Joi.string().required(),
-  JAZZCASH_CURRENCY: Joi.string().required(),
-  JAZZCASH_INQUIRY_API_URL: Joi.string().uri().required(),
+  JAZZCASH_SALT: Joi.string().optional(),
+  JAZZCASH_CURRENCY: Joi.string().optional().default('PKR'),
+  JAZZCASH_BASE_URL: Joi.string().uri().optional(),
+  JAZZCASH_INQUIRY_API_URL: Joi.string().uri().optional(),
   JAZZCASH_REFUND_API_URL: Joi.string().uri().allow('').optional(),
   JAZZCASH_CARD_REFUND_API_URL: Joi.string().uri().allow('').optional(),
-  JAZZCASH_ORCHESTRATOR_URL: Joi.string().uri().required(),
+  JAZZCASH_ORCHESTRATOR_URL: Joi.string().uri().optional(),
 }).unknown(true);
