@@ -1,0 +1,11 @@
+backend/node_modules
+backend/dist
+.git
+backend/tsconfig.tsbuildinfo
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/*.sqlite
+backend/coverage
+backend/npm-debug.log*
+.DS_Store
