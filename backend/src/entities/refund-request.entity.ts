@@ -63,6 +63,9 @@ export class RefundRequest {
   @Column({ name: 'payment_method', type: 'varchar', length: 50, nullable: true })
   paymentMethod: string;
 
+  @Column({ name: 'payment_mode', type: 'varchar', length: 50, nullable: true, default: '3pp' })
+  paymentMode: string;
+
   @Column({ name: 'package_name', type: 'varchar', length: 255, nullable: true })
   packageName: string;
 
@@ -75,6 +78,12 @@ export class RefundRequest {
 
   @Column({ name: 'user_amount', type: 'decimal', precision: 10, scale: 2 })
   userAmount: number;
+
+  @Column({ name: 'balance_charge_amount', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  balanceChargeAmount: number;
+
+  @Column({ name: 'external_charge_amount', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  externalChargeAmount: number;
 
   @Column({ name: 'is_partial_refund', type: 'boolean', default: false })
   isPartialRefund: boolean;

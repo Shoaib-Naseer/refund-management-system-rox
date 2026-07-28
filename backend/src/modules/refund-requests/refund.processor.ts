@@ -66,7 +66,11 @@ export class RefundProcessor {
     let isSuccess = false;
 
     if (bulkOperationId) {
-      const gatewayMethod = normalizePaymentMethodForGateway(refundRequest.paymentMethod);
+      const gatewayMethod = normalizePaymentMethodForGateway(
+        refundRequest.paymentMethod,
+        refundRequest.paymentMode,
+        refundRequest.transactionReference,
+      );
       const amount = Number(refundRequest.requestedRefundAmount);
       const ref = refundRequest.transactionReference || String(refundRequest.id);
       
@@ -83,7 +87,11 @@ export class RefundProcessor {
 
     try {
       // Normalize the payment method and call the gateway
-      const gatewayMethod = normalizePaymentMethodForGateway(refundRequest.paymentMethod);
+      const gatewayMethod = normalizePaymentMethodForGateway(
+        refundRequest.paymentMethod,
+        refundRequest.paymentMode,
+        refundRequest.transactionReference,
+      );
       const result = await this.refundProcessingService.processRefund(gatewayMethod, {
         orderId: refundRequest.transactionReference,
         amount: Number(refundRequest.requestedRefundAmount),
@@ -216,9 +224,22 @@ export class RefundProcessor {
   }
 }
 
-function normalizePaymentMethodForGateway(raw: string | null): string {
+function normalizePaymentMethodForGateway(
+  raw: string | null,
+  paymentMode?: string | null,
+  txRef?: string | null,
+): string {
   const key = (raw || '').toUpperCase().replace(/_/g, '');
+  const mode = (paymentMode || '').toUpperCase();
+  if (mode === 'DUAL' || key === 'DUAL') {
+    if (txRef) {
+      const ref = txRef.toUpperCase();
+      if (ref.startsWith('JC') || ref.startsWith('ROX')) return 'Jazz_Cash';
+      if (ref.startsWith('T')) return 'Card';
+    }
+  }
   if (key === 'JAZZCASH') return 'Jazz_Cash';
   if (key === 'CARD') return 'Card';
+  if (key === 'JAZZBALANCE') return 'Jazz_Balance';
   return 'Easy_Paisa';
 }

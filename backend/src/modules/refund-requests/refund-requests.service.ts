@@ -129,20 +129,23 @@ export class RefundRequestsService {
       `[RefundRequest] No RefundCase found to link for MSISDN ${normalizedMsisdn} — generating new case`,
     );
 
-    let paymentMethodEnum: any = null;
+    let paymentMethodEnum: any = hr.paymentMethod || null;
     const pmUpper = String(hr.paymentMethod || "")
       .toUpperCase()
       .replace(/_/g, "");
     if (pmUpper === "EASYPAISA") paymentMethodEnum = "Easy_Paisa";
     else if (pmUpper === "JAZZCASH") paymentMethodEnum = "Jazz_Cash";
-    else if (pmUpper === "CARD" || pmUpper === "MCBCARD")
-      paymentMethodEnum = "Card";
+    else if (pmUpper === "CARD" || pmUpper === "MCBCARD") paymentMethodEnum = "Card";
+    else if (pmUpper === "JAZZBALANCE") paymentMethodEnum = "Jazz_Balance";
 
     const newCase = this.refundCaseRepo.create({
       caseNumber: `RC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       msisdn: normalizedMsisdn,
       amount: dto.requestedRefundAmount || Number(hr.amountDeducted) || 0,
       paymentMethod: paymentMethodEnum,
+      paymentMode: hr.paymentMode || '3pp',
+      balanceChargeAmount: hr.balanceChargeAmount != null ? Number(hr.balanceChargeAmount) : null,
+      externalChargeAmount: hr.externalChargeAmount != null ? Number(hr.externalChargeAmount) : null,
       accountNumber: hr.walletNumber || null,
       packageCode: hr.packageName || null,
       orderId:
@@ -239,17 +242,21 @@ export class RefundRequestsService {
 
       // No existing case anywhere — generate a new one (needs its own round-trip for the id).
       const hr = r.historyRecord;
-      let paymentMethodEnum: any = null;
+      let paymentMethodEnum: any = hr.paymentMethod || null;
       const pmUpper = String(hr.paymentMethod || '').toUpperCase().replace(/_/g, '');
       if (pmUpper === 'EASYPAISA') paymentMethodEnum = 'Easy_Paisa';
       else if (pmUpper === 'JAZZCASH') paymentMethodEnum = 'Jazz_Cash';
       else if (pmUpper === 'CARD' || pmUpper === 'MCBCARD') paymentMethodEnum = 'Card';
+      else if (pmUpper === 'JAZZBALANCE') paymentMethodEnum = 'Jazz_Balance';
 
       const newCase = manager.create(RefundCase, {
         caseNumber: `RC-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         msisdn: normalizedMsisdn,
         amount: r.requestedRefundAmount || Number(hr.amountDeducted) || 0,
         paymentMethod: paymentMethodEnum,
+        paymentMode: hr.paymentMode || '3pp',
+        balanceChargeAmount: hr.balanceChargeAmount != null ? Number(hr.balanceChargeAmount) : null,
+        externalChargeAmount: hr.externalChargeAmount != null ? Number(hr.externalChargeAmount) : null,
         accountNumber: hr.walletNumber || null,
         packageCode: hr.packageName || null,
         orderId: hr.orderId || hr.paymentOrderId || hr.transactionReference || null,
@@ -342,6 +349,9 @@ export class RefundRequestsService {
       paymentOrderId: hr.paymentOrderId || null,
       legacyTransactionId: hr.tid || null,
       paymentMethod: hr.paymentMethod || null,
+      paymentMode: hr.paymentMode || '3pp',
+      balanceChargeAmount: hr.balanceChargeAmount != null ? Number(hr.balanceChargeAmount) : null,
+      externalChargeAmount: hr.externalChargeAmount != null ? Number(hr.externalChargeAmount) : null,
       packageName: hr.packageName || null,
       amountDeducted,
       loanAmount,

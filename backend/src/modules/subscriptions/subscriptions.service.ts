@@ -161,8 +161,26 @@ export class SubscriptionsService {
       params.push(`${todayStr} 00:00:00`);
     }
     if (paymentMethod && paymentMethod !== "ALL") {
-      conditions.push(`main.payment_method LIKE ?`);
-      params.push(`%${paymentMethod}%`);
+      const methods = paymentMethod.split(',').map(m => m.trim().toUpperCase()).filter(Boolean);
+      if (methods.length > 0) {
+        const subConds: string[] = [];
+        for (const m of methods) {
+          if (m === "EASYPAISA") {
+            subConds.push(`main.payment_method LIKE '%easypaisa%' OR main.payment_method LIKE '%easy_paisa%'`);
+          } else if (m === "JAZZCASH") {
+            subConds.push(`main.payment_method LIKE '%jazzcash%' OR main.payment_method LIKE '%jazz_cash%'`);
+          } else if (m === "CARD") {
+            subConds.push(`main.payment_method LIKE '%card%'`);
+          } else if (m === "JAZZ_BALANCE" || m === "JAZZBALANCE") {
+            subConds.push(`main.payment_method LIKE '%jazz_balance%' OR main.payment_method LIKE '%jazzbalance%'`);
+          } else if (m === "DUAL") {
+            subConds.push(`main.payment_method LIKE '%dual%'`);
+          }
+        }
+        if (subConds.length > 0) {
+          conditions.push(`(${subConds.join(' OR ')})`);
+        }
+      }
     }
     if (packageName) {
       conditions.push(`(main.service_type LIKE ? OR main.service_code LIKE ?)`);
@@ -238,12 +256,46 @@ export class SubscriptionsService {
         .replace(/_/g, "");
       const gatewayRef = row.payment_gateway_ref || "";
 
+      let paymentMethodStr = "Easy_Paisa";
+      let paymentModeStr = "3pp";
+
+      if (pmUpper === "JAZZCASH") {
+        paymentMethodStr = "Jazz_Cash";
+      } else if (pmUpper === "CARD") {
+        paymentMethodStr = "Card";
+      } else if (pmUpper === "JAZZBALANCE") {
+        paymentMethodStr = "Jazz_Balance";
+        paymentModeStr = "jazzbalance";
+      } else if (pmUpper === "DUAL") {
+        const refUpper = String(gatewayRef).toUpperCase();
+        if (refUpper.startsWith("INV")) {
+          paymentMethodStr = "Easy_Paisa";
+        } else if (refUpper.startsWith("ROX")) {
+          paymentMethodStr = "Jazz_Cash";
+        } else if (refUpper.startsWith("T")) {
+          paymentMethodStr = "Card";
+        } else {
+          paymentMethodStr = "Jazz_Cash"; // fallback
+        }
+        paymentModeStr = "dual";
+      }
+
+      let balanceChargeAmount = null;
+      let externalChargeAmount = null;
+      if (paymentModeStr === "dual") {
+        const fullPrice = Number(row.fulfillment_price || 0);
+        const amtDeducted = Number(row.amount_deducted || 0);
+        balanceChargeAmount = Math.max(fullPrice - amtDeducted, 0);
+        externalChargeAmount = amtDeducted;
+      }
+
       return {
         era: 2,
         subscriptionType: "Old Subscription",
         transactionReference: gatewayRef || row.transaction_id,
         orderId: row.transaction_id,
-        paymentMethod: row.payment_method || null,
+        paymentMethod: paymentMethodStr,
+        paymentMode: paymentModeStr,
         serviceCode: row.service_code || null,
         mobileNumber: row.mobile_number || "",
         walletNumber: walletMap.get(`${pmUpper}:${gatewayRef}`) ?? null,
@@ -252,6 +304,8 @@ export class SubscriptionsService {
         userAmount: refund.userAmount,
         actualRefundAmount: refund.actualRefundAmount,
         isPartialRefund: refund.isPartialRefund,
+        balanceChargeAmount,
+        externalChargeAmount,
         paymentStatus: String(row.payment_status || "").toUpperCase(),
         fulfillmentStatus: String(
           row.fulfillment_status || row.fulfillment_message || "MISSING",
@@ -307,8 +361,26 @@ export class SubscriptionsService {
       params.push(`${todayStr} 00:00:00`);
     }
     if (paymentMethod && paymentMethod !== "ALL") {
-      conditions.push(`s.payment_key LIKE ?`);
-      params.push(`%${paymentMethod}%`);
+      const methods = paymentMethod.split(',').map(m => m.trim().toUpperCase()).filter(Boolean);
+      if (methods.length > 0) {
+        const subConds: string[] = [];
+        for (const m of methods) {
+          if (m === "EASYPAISA") {
+            subConds.push(`s.payment_key LIKE '%easypaisa%' OR s.payment_key LIKE '%easy_paisa%'`);
+          } else if (m === "JAZZCASH") {
+            subConds.push(`s.payment_key LIKE '%jazzcash%' OR s.payment_key LIKE '%jazz_cash%'`);
+          } else if (m === "CARD") {
+            subConds.push(`s.payment_key LIKE '%card%'`);
+          } else if (m === "JAZZ_BALANCE" || m === "JAZZBALANCE") {
+            subConds.push(`s.payment_key LIKE '%jazz_balance%' OR s.payment_key LIKE '%jazzbalance%'`);
+          } else if (m === "DUAL") {
+            subConds.push(`s.payment_key = 'DUAL'`);
+          }
+        }
+        if (subConds.length > 0) {
+          conditions.push(`(${subConds.join(' OR ')})`);
+        }
+      }
     }
     if (packageName) {
       conditions.push(`(sfr.bundle_code LIKE ?)`);
@@ -387,6 +459,9 @@ export class SubscriptionsService {
             s.mobile_number AS sub_mobile_number,
             s.wallet_number AS sub_wallet_number,
             s.payment_key AS sub_payment_key,
+            s.payment_method AS sub_payment_method,
+            s.balance_charge_amount AS sub_balance_charge_amount,
+            s.external_charge_amount AS sub_external_charge_amount,
             sfr.bundle_code AS bundle_code,
             sfr.fulfillment_status AS last_fulfillment_status,
             sfr.error_message AS last_error_message,
@@ -421,13 +496,48 @@ export class SubscriptionsService {
       const isEligible =
         subStatus !== "ACTIVE" && fulfillmentStatus !== "SUCCESS";
 
+      let paymentMethodStr = "Easy_Paisa";
+      let paymentModeStr = "3pp";
+      const pmMode = String(row.sub_payment_method || "").toUpperCase();
+      const pmKey = String(row.sub_payment_key || "").toUpperCase();
+
+      if (pmKey === "JAZZCASH") {
+        paymentMethodStr = "Jazz_Cash";
+      } else if (pmKey === "CARD") {
+        paymentMethodStr = "Card";
+      } else if (pmKey === "JAZZ_BALANCE" || pmKey === "JAZZBALANCE") {
+        paymentMethodStr = "Jazz_Balance";
+        paymentModeStr = "jazzbalance";
+      }
+
+      if (pmMode === "DUAL" || pmKey === "DUAL") {
+        paymentModeStr = "dual";
+        const ref = String(row.txn_reference || row.payment_order_id || "").toUpperCase();
+        if (ref.startsWith("JC") || ref.startsWith("ROX")) {
+          paymentMethodStr = "Jazz_Cash";
+        } else if (ref.startsWith("T")) {
+          paymentMethodStr = "Card";
+        } else if (ref.startsWith("EP")) {
+          paymentMethodStr = "Easy_Paisa";
+        } else {
+          paymentMethodStr = "Jazz_Cash"; // fallback
+        }
+      } else if (pmMode === "JAZZ_BALANCE" || pmMode === "JAZZBALANCE") {
+        paymentModeStr = "jazzbalance";
+        paymentMethodStr = "Jazz_Balance";
+      }
+
+      const balanceChargeAmount = row.sub_balance_charge_amount != null ? Number(row.sub_balance_charge_amount) : null;
+      const externalChargeAmount = row.sub_external_charge_amount != null ? Number(row.sub_external_charge_amount) : null;
+
       return {
         era: 3,
         subscriptionType: "New Subscription",
         transactionReference: row.txn_reference || row.payment_order_id,
         orderId: row.order_reference_id,
         paymentOrderId: row.payment_order_id,
-        paymentMethod: paymentKey || null,
+        paymentMethod: paymentMethodStr,
+        paymentMode: paymentModeStr,
         serviceCode: row.bundle_code || null,
         mobileNumber: row.sub_mobile_number || "",
         walletNumber: row.sub_wallet_number || row.account_no || null,
@@ -436,6 +546,8 @@ export class SubscriptionsService {
         userAmount,
         actualRefundAmount: userAmount,
         isPartialRefund,
+        balanceChargeAmount,
+        externalChargeAmount,
         paymentStatus: String(row.transaction_status || "").toUpperCase(),
         fulfillmentStatus,
         packagePosted: subStatus,
@@ -673,9 +785,27 @@ export class SubscriptionsService {
     }
 
     if (paymentMethod && paymentMethod !== "ALL") {
-      queryBuilder.andWhere("rr.paymentMethod LIKE :paymentMethod", {
-        paymentMethod: `%${paymentMethod}%`,
-      });
+      const methods = paymentMethod.split(',').map(m => m.trim().toUpperCase()).filter(Boolean);
+      if (methods.length > 0) {
+        const subConds: string[] = [];
+        const queryParams: Record<string, string> = {};
+        methods.forEach((m, idx) => {
+          if (m === "DUAL") {
+            subConds.push(`rr.paymentMode = :mode_${idx}`);
+            queryParams[`mode_${idx}`] = 'dual';
+          } else {
+            subConds.push(`rr.paymentMethod LIKE :pm_${idx}`);
+            if (m === "EASYPAISA") queryParams[`pm_${idx}`] = '%Easy_Paisa%';
+            else if (m === "JAZZCASH") queryParams[`pm_${idx}`] = '%Jazz_Cash%';
+            else if (m === "CARD") queryParams[`pm_${idx}`] = '%Card%';
+            else if (m === "JAZZ_BALANCE" || m === "JAZZBALANCE") queryParams[`pm_${idx}`] = '%Jazz_Balance%';
+            else queryParams[`pm_${idx}`] = `%${m}%`;
+          }
+        });
+        if (subConds.length > 0) {
+          queryBuilder.andWhere(`(${subConds.join(' OR ')})`, queryParams);
+        }
+      }
     }
 
     if (packageName && packageName !== "ALL") {
@@ -695,6 +825,7 @@ export class SubscriptionsService {
       orderId: rr.orderId || "",
       paymentOrderId: rr.paymentOrderId || undefined,
       paymentMethod: rr.paymentMethod,
+      paymentMode: rr.paymentMode,
       serviceCode: rr.packageName,
       mobileNumber: rr.mobileNumber || rr.msisdn,
       walletNumber: rr.walletNumber,

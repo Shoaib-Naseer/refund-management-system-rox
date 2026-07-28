@@ -39,6 +39,8 @@ export enum PaymentMethod {
   EASY_PAISA = 'Easy_Paisa',
   JAZZ_CASH = 'Jazz_Cash',
   CARD = 'Card',
+  JAZZ_BALANCE = 'Jazz_Balance',
+  DUAL = 'DUAL',
 }
 
 @Entity('refund_cases')
@@ -61,13 +63,17 @@ export class RefundCase {
   @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
   amount: number;
 
-  @Column({
-    name: 'payment_method',
-    type: 'simple-enum',
-    enum: PaymentMethod,
-    nullable: true,
-  })
-  paymentMethod: PaymentMethod;
+  @Column({ name: 'payment_method', type: 'varchar', length: 50, nullable: true })
+  paymentMethod: string;
+
+  @Column({ name: 'payment_mode', type: 'varchar', length: 50, nullable: true, default: '3pp' })
+  paymentMode: string;
+
+  @Column({ name: 'balance_charge_amount', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  balanceChargeAmount: number;
+
+  @Column({ name: 'external_charge_amount', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  externalChargeAmount: number;
 
   @Column({ name: 'account_number', type: 'varchar', length: 255, nullable: true })
   accountNumber: string;

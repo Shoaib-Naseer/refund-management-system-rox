@@ -57,6 +57,9 @@ export interface HistoryRecord {
   requestReason?: string | null;
   overrideJustification?: string | null;
   reviewComment?: string | null;
+  paymentMode?: string;
+  balanceChargeAmount?: number | null;
+  externalChargeAmount?: number | null;
 }
 
 export interface HistoryFilters {
@@ -476,6 +479,9 @@ export class HistoryService {
               s.mobile_number AS sub_mobile_number,
               s.wallet_number AS sub_wallet_number,
               s.payment_key AS sub_payment_key,
+              s.payment_method AS sub_payment_method,
+              s.balance_charge_amount AS sub_balance_charge_amount,
+              s.external_charge_amount AS sub_external_charge_amount,
               b.name AS bundle_name,
               b.code AS bundle_code
             FROM \`Fintech_payments\`.\`transactions\` t
@@ -509,6 +515,9 @@ export class HistoryService {
                   s.mobile_number AS sub_mobile_number,
                   s.wallet_number AS sub_wallet_number,
                   s.payment_key AS sub_payment_key,
+                  s.payment_method AS sub_payment_method,
+                  s.balance_charge_amount AS sub_balance_charge_amount,
+                  s.external_charge_amount AS sub_external_charge_amount,
                   b.name AS bundle_name,
                   b.code AS bundle_code
                 FROM \`Fintech_payments\`.\`events\` e
@@ -544,6 +553,9 @@ export class HistoryService {
               s.mobile_number AS sub_mobile_number,
               s.wallet_number AS sub_wallet_number,
               s.payment_key AS sub_payment_key,
+              s.payment_method AS sub_payment_method,
+              s.balance_charge_amount AS sub_balance_charge_amount,
+              s.external_charge_amount AS sub_external_charge_amount,
               b.name AS bundle_name,
               b.code AS bundle_code
             FROM \`fintech_subscription\`.\`subscriptions\` s
@@ -678,6 +690,38 @@ export class HistoryService {
         refundEligibility = (packagePosted === "No" && !isReversed) ? "Eligible" : "Ineligible";
       }
 
+      let paymentMethodStr = "Easy_Paisa";
+      let paymentModeStr = "3pp";
+      const pmMode = String(row.sub_payment_method || "").toUpperCase();
+      const pmKey = String(row.sub_payment_key || "").toUpperCase();
+
+      if (pmKey === "JAZZCASH") {
+        paymentMethodStr = "Jazz_Cash";
+      } else if (pmKey === "CARD") {
+        paymentMethodStr = "Card";
+      } else if (pmKey === "JAZZ_BALANCE" || pmKey === "JAZZBALANCE") {
+        paymentMethodStr = "Jazz_Balance";
+        paymentModeStr = "jazzbalance";
+      }
+
+      if (pmMode === "DUAL") {
+        paymentModeStr = "dual";
+        const ref = String(transactionReference || paymentOrderId || "").toUpperCase();
+        if (ref.startsWith("JC") || ref.startsWith("ROX")) {
+          paymentMethodStr = "Jazz_Cash";
+        } else if (ref.startsWith("T")) {
+          paymentMethodStr = "Card";
+        } else if (ref.startsWith("EP")) {
+          paymentMethodStr = "Easy_Paisa";
+        }
+      } else if (pmMode === "JAZZ_BALANCE" || pmMode === "JAZZBALANCE") {
+        paymentModeStr = "jazzbalance";
+        paymentMethodStr = "Jazz_Balance";
+      }
+
+      const balanceChargeAmount = row.sub_balance_charge_amount != null ? Number(row.sub_balance_charge_amount) : null;
+      const externalChargeAmount = row.sub_external_charge_amount != null ? Number(row.sub_external_charge_amount) : null;
+
       results.push({
         era: 3,
         tableName:
@@ -685,7 +729,8 @@ export class HistoryService {
         transactionReference,
         orderId: paymentOrderId,
         paymentOrderId,
-        paymentMethod: paymentKey || null,
+        paymentMethod: paymentMethodStr,
+        paymentMode: paymentModeStr,
         packageName: bundleName || bundleCode,
         amountDeducted: dbAmount,
         paymentStatus: dbStatus,
@@ -697,6 +742,8 @@ export class HistoryService {
         isPartialRefund,
         loanAmount,
         userAmount,
+        balanceChargeAmount,
+        externalChargeAmount,
         timestamp: createdAt,
         mobileNumber: row.sub_mobile_number || "",
         walletNumber: row.sub_wallet_number || row.account_no || "",
@@ -837,6 +884,39 @@ export class HistoryService {
         refundEligibility = (packagePosted === "No" && !isReversed) ? "Eligible" : "Ineligible";
       }
 
+      let paymentMethodStr = "Easy_Paisa";
+      let paymentModeStr = "3pp";
+      const pmUpper = String(row.payment_method || "").toUpperCase().replace(/_/g, "");
+      if (pmUpper === "JAZZCASH") {
+        paymentMethodStr = "Jazz_Cash";
+      } else if (pmUpper === "CARD") {
+        paymentMethodStr = "Card";
+      } else if (pmUpper === "JAZZBALANCE") {
+        paymentMethodStr = "Jazz_Balance";
+        paymentModeStr = "jazzbalance";
+      } else if (pmUpper === "DUAL") {
+        const refUpper = String(gatewayRef).toUpperCase();
+        if (refUpper.startsWith("INV")) {
+          paymentMethodStr = "Easy_Paisa";
+        } else if (refUpper.startsWith("ROX")) {
+          paymentMethodStr = "Jazz_Cash";
+        } else if (refUpper.startsWith("T")) {
+          paymentMethodStr = "Card";
+        } else {
+          paymentMethodStr = "Jazz_Cash"; // fallback
+        }
+        paymentModeStr = "dual";
+      }
+
+      let balanceChargeAmount = null;
+      let externalChargeAmount = null;
+      if (paymentModeStr === "dual") {
+        const fullPrice = Number(row.fulfillment_price || 0);
+        const amtDeducted = Number(row.amount_deducted || 0);
+        balanceChargeAmount = Math.max(fullPrice - amtDeducted, 0);
+        externalChargeAmount = amtDeducted;
+      }
+
       const walletNumber = row.wallet_number || null;
 
       results.push({
@@ -845,7 +925,8 @@ export class HistoryService {
         transactionReference: gatewayRef,
         orderId: txId,
         tid: txId,
-        paymentMethod: row.payment_method || null,
+        paymentMethod: paymentMethodStr,
+        paymentMode: paymentModeStr,
         packageName: serviceCode || serviceType,
         amountDeducted: price,
         paymentStatus: dbPayStatus,
@@ -858,6 +939,8 @@ export class HistoryService {
         isPartialRefund: refundDetails.isPartialRefund,
         loanAmount: refundDetails.loanRepaymentAmount,
         userAmount: refundDetails.userAmount,
+        balanceChargeAmount,
+        externalChargeAmount,
         timestamp: createdAt,
         mobileNumber: row.mobile_number || "",
         walletNumber: walletNumber || "",

@@ -60,21 +60,30 @@ export class RefundProcessingService {
 
     try {
       let result;
-      if (paymentMethod === "Jazz_Cash" || paymentMethod === "JAZZCASH") {
+      const pmUpper = String(paymentMethod || '').toUpperCase().replace(/_/g, '');
+      if (pmUpper === "JAZZCASH" || pmUpper === "JAZZ_CASH") {
         result = await this.refundViaJazzCashWallet(orderId, amount);
       } else if (
-        paymentMethod === "Card" ||
-        paymentMethod === "CARD" ||
-        paymentMethod === "MCB_CARD"
+        pmUpper === "CARD" ||
+        pmUpper === "MCB_CARD" ||
+        pmUpper === "MCBCARD"
       ) {
         result = await this.refundViaJazzCashCard(orderId, amount);
-      } else {
-        // Fallback to EasyPaisa
+      } else if (
+        pmUpper === "EASYPAISA" ||
+        pmUpper === "EASY_PAISA"
+      ) {
         result = await this.refundViaEasypaisa(
           orderId,
           amount,
           params.orderDate,
         );
+      } else {
+        return {
+          success: false,
+          description: `Automatic refund is not supported for payment method: ${paymentMethod}`,
+          rawResponse: { error: `Unsupported payment method: ${paymentMethod}` }
+        };
       }
 
       return {
